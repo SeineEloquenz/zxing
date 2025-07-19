@@ -42,14 +42,11 @@ final class State {
   private final int binaryShiftByteCount;
   // The total number of bits generated (including Binary Shift).
   private final int bitCount;
-  private final int binaryShiftCost;
-
   private State(Token token, int mode, int binaryBytes, int bitCount) {
     this.token = token;
     this.mode = mode;
     this.binaryShiftByteCount = binaryBytes;
     this.bitCount = bitCount;
-    this.binaryShiftCost = calculateBinaryShiftCost(binaryBytes);
   }
 
   int getMode() {
@@ -150,15 +147,12 @@ final class State {
   // Returns true if "this" state is better (or equal) to be in than "that"
   // state under all possible circumstances.
   boolean isBetterThanOrEqualTo(State other) {
-    int newModeBitCount = this.bitCount + (HighLevelEncoder.LATCH_TABLE[this.mode][other.mode] >> 16);
-    if (this.binaryShiftByteCount < other.binaryShiftByteCount) {
-      // add additional B/S encoding cost of other, if any
-      newModeBitCount += other.binaryShiftCost - this.binaryShiftCost;
-    } else if (this.binaryShiftByteCount > other.binaryShiftByteCount && other.binaryShiftByteCount > 0) {
-      // maximum possible additional cost (we end up exceeding the 31 byte boundary and other state can stay beneath it)
-      newModeBitCount += 10;
+    int mySize = this.bitCount + (HighLevelEncoder.LATCH_TABLE[this.mode][other.mode] >> 16);
+    if (other.binaryShiftByteCount > 0 &&
+        (this.binaryShiftByteCount == 0 || this.binaryShiftByteCount > other.binaryShiftByteCount)) {
+      mySize += 10;     // Cost of entering Binary Shift mode.
     }
-    return newModeBitCount <= other.bitCount;
+    return mySize <= other.bitCount;
   }
 
   BitArray toBitArray(byte[] text) {
@@ -177,19 +171,6 @@ final class State {
   @Override
   public String toString() {
     return String.format("%s bits=%d bytes=%d", HighLevelEncoder.MODE_NAMES[mode], bitCount, binaryShiftByteCount);
-  }
-
-  private static int calculateBinaryShiftCost(int binaryShiftByteCount) {
-    if (binaryShiftByteCount > 62) {
-      return 21; // B/S with extended length
-    }
-    if (binaryShiftByteCount > 31) {
-      return 20; // two B/S
-    }
-    if (binaryShiftByteCount > 0) {
-      return 10; // one B/S
-    }
-    return 0;
   }
 
 }
